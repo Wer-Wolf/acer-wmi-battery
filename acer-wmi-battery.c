@@ -67,6 +67,11 @@ MODULE_PARM_DESC(
 	"Turn battery health mode on (value > 0) or off (value = 0) during module "
 	"initialization (default value < 0: do not modify existing settings.)");
 
+static bool battery_health_available = false;
+
+module_param(battery_health_available, bool, 0);
+MODULE_PARM_DESC(battery_health_available, "Enable or disable access to the WMI methods related to battery health");
+
 static acpi_status get_battery_information(u32 index, u32 battery, u32 *result)
 {
 	u32 args[2] = { index, battery };
@@ -106,6 +111,12 @@ get_battery_health_control_status(struct battery_info *bat_status)
 {
 	union acpi_object *obj;
 	acpi_status status;
+
+	if (!battery_health_available) {
+		bat_status->health_mode = -1;
+		bat_status->calibration_mode = -1;
+		return 0;
+	}
 
 	/* Acer Care Center seems to always call the WMI method
 	   with fixed parameters. This yields information about
@@ -360,7 +371,7 @@ static int __init acer_battery_init(void)
 		return -ENODEV;
 	}
 
-	if (enable_health_mode >= 0) {
+	if (enable_health_mode >= 0 && battery_health_available) {
 		acpi_status status;
 		status = set_battery_health_control(HEALTH_MODE,
 						    enable_health_mode);
