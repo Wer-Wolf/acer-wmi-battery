@@ -110,6 +110,12 @@ get_battery_health_control_status(struct battery_info *bat_status)
 	union acpi_object *obj;
 	acpi_status status;
 
+	if (!battery_health_available) {
+		bat_status->health_mode = -1;
+		bat_status->calibration_mode = -1;
+		return AE_OK;
+	};
+
 	/* Acer Care Center seems to always call the WMI method
 	   with fixed parameters. This yields information about
 	   the availability and state of both health and
@@ -393,7 +399,7 @@ static int __init acer_battery_init(void)
 
 	parse_bmof();
 
-	if (enable_health_mode >= 0) {
+	if (enable_health_mode >= 0 && battery_health_available) {
 		acpi_status status;
 		status = set_battery_health_control(HEALTH_MODE,
 						    enable_health_mode);
