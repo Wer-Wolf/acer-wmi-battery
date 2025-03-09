@@ -7,6 +7,7 @@
  * battery charge limit ("health mode") and to calibrate the battery.
  */
 
+#include <linux/umh.h>
 #include <linux/init.h>
 #include <linux/kernel.h>
 #include <linux/limits.h>
@@ -56,6 +57,8 @@ struct battery_info {
 	s8 health_mode;
 	s8 calibration_mode;
 };
+
+static bool battery_health_available;
 
 static struct battery_info battery_status;
 
@@ -218,6 +221,34 @@ static void print_modes(const char *prefix, bool print_if_empty,
 		calib_mode ? "calibration mode" : "");
 }
 
+static void parse_bmof(void)
+{
+	struct subprocess_info *info;
+	static char *argv[] = {
+		"acer-wmi-battery-parse-bmof",
+		NULL
+	};
+	static char *envp[] = {
+		"HOME=/",
+		"TERM=linux",
+		"PATH=/sbin:/usr/sbin:/bin:/usr/bin",
+		NULL
+	};
+	int ret;
+
+	info = call_usermodehelper_setup("/usr/bin/acer-wmi-battery-parse-bmof", argv, envp,
+					 GFP_KERNEL, NULL, NULL, NULL);
+
+	ret = call_usermodehelper_exec(info, UMH_WAIT_PROC | UMH_KILLABLE);
+	if (!ret) {
+		pr_info("Enabling battery health control\n");
+		battery_health_available = true;
+	} else {
+		pr_info("Disabling battery health control\n");
+		battery_health_available = false;
+	}
+}
+
 static acpi_status init_state(void)
 {
 	bool print_state_if_empty;
@@ -359,6 +390,8 @@ static int __init acer_battery_init(void)
 		pr_err("Acer battery control guid not found\n");
 		return -ENODEV;
 	}
+
+	parse_bmof();
 
 	if (enable_health_mode >= 0) {
 		acpi_status status;
